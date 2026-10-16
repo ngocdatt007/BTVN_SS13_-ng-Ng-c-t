@@ -1,0 +1,92 @@
+Bài tập về nhà: Xây dựng công thức tính hoa hồng và phân quyền dữ liệu trên Lark Base tại Viettel Store
+Môn học: BI301 – Business Intelligence  
+Doanh nghiệp: Viettel Store (Hệ thống Bán lẻ Viettel Telecom)
+Phần 1: Cú pháp công thức hàm Formula tính hoa hồng và tiền thưởng tốc độ
+Trong vai trò Chuyên gia Quản trị Dữ liệu & Phân quyền Hệ thống, việc xây dựng công thức tính hoa hồng tự động trên Lark Base giúp đảm bảo tính minh bạch khi chi trả incentive. Chính sách gồm hai phần: hoa hồng cơ bản theo giá gói và tiền thưởng tốc độ nếu kích hoạt dưới 15 phút.
+Giả định bảng Ho_So_Hoa_Mang có các trường: `Gia_Goi_Cuoc` (Number), `Thoi_Gian_Xu_Ly` (Number – phút), `Trang_Thai_Ho_So` (Single Select).
+Công thức hoa hồng cơ bản:
+```text
+IF(
+  Trang_Thai_Ho_So != "Đã kích hoạt",
+  0,
+  IF(
+    Gia_Goi_Cuoc < 150000,
+    Gia_Goi_Cuoc * 0.15,
+    IF(
+      Gia_Goi_Cuoc <= 250000,
+      Gia_Goi_Cuoc * 0.20,
+      Gia_Goi_Cuoc * 0.25
+    )
+  )
+)
+```
+Gói dưới 150.000 VNĐ: 15%
+Gói từ 150.000 đến 250.000 VNĐ: 20%
+Gói trên 250.000 VNĐ: 25%
+Chỉ tính khi trạng thái là “Đã kích hoạt”.
+Công thức tiền thưởng tốc độ:
+```text
+IF(
+  AND(Trang_Thai_Ho_So = "Đã kích hoạt", Thoi_Gian_Xu_Ly < 15),
+  10000,
+  0
+)
+```
+Công thức tổng hoa hồng nhận được:
+```text
+IF(
+  Trang_Thai_Ho_So != "Đã kích hoạt",
+  0,
+  IF(
+    Gia_Goi_Cuoc < 150000,
+    Gia_Goi_Cuoc * 0.15,
+    IF(
+      Gia_Goi_Cuoc <= 250000,
+      Gia_Goi_Cuoc * 0.20,
+      Gia_Goi_Cuoc * 0.25
+    )
+  )
+) + IF(
+  AND(Trang_Thai_Ho_So = "Đã kích hoạt", Thoi_Gian_Xu_Ly < 15),
+  10000,
+  0
+)
+```
+Công thức đặt trong trường kiểu Formula để tự động cập nhật mỗi khi dữ liệu thay đổi, giúp giảm sai sót thủ công và dễ điều chỉnh khi chính sách thay đổi.
+Phần 2: Cấu hình liên kết 3 bảng bằng trường Link, Lookup và Rollup
+Để quản lý dữ liệu hiệu quả, cần liên kết ba bảng:
+Ho_So_Hoa_Mang – bảng chính chứa hồ sơ khách hàng
+Danh_Muc_Goi_Cuoc – danh mục gói cước (mã gói, tên gói, giá)
+Danh_Sach_Nhan_Vien – danh sách nhân viên (mã NV, họ tên, chi nhánh)
+Thiết lập trường Link
+Trong bảng Ho_So_Hoa_Mang tạo trường `Goi_Cuoc` kiểu Link liên kết đến Danh_Muc_Goi_Cuoc (Many-to-One).
+Tạo trường `Nhan_Vien_Phu_Trach` kiểu Link liên kết đến Danh_Sach_Nhan_Vien.
+Sử dụng trường Lookup
+Sau khi có Link, tạo Lookup để lấy thông tin tự động:
+`Gia_Goi_Cuoc` và `Ten_Goi_Cuoc` ← Lookup từ bảng Danh_Muc_Goi_Cuoc
+`Ten_Nhan_Vien` và `Chi_Nhanh` ← Lookup từ bảng Danh_Sach_Nhan_Vien
+Lookup đảm bảo dữ liệu luôn đồng bộ. Khi cập nhật giá gói hoặc thông tin nhân viên ở bảng gốc, các hồ sơ liên quan sẽ tự động phản ánh giá trị mới.
+Sử dụng trường Rollup tính tổng hoa hồng
+Trong bảng Danh_Sach_Nhan_Vien, tạo trường `Tong_Hoa_Hong` kiểu Rollup:
+Liên kết từ trường `Nhan_Vien_Phu_Trach` của bảng hồ sơ.
+Chọn trường cần tính: `Tong_Hoa_Hong_Nhan_Duoc` (Formula).
+Hàm tổng hợp: SUM.
+Khi mở hồ sơ nhân viên Hoàng Mai, trường Rollup sẽ hiển thị tổng hoa hồng đã tích lũy từ tất cả hồ sơ do cô phụ trách và đã kích hoạt thành công. Cách này hỗ trợ quản lý theo dõi hiệu suất cá nhân nhanh chóng và chính xác.
+Phần 3: Ma trận phân quyền Role-based Access Control trên Lark Base
+Yêu cầu bảo mật dữ liệu khách hàng đòi hỏi thiết lập phân quyền theo vai trò. Ba vai trò được định nghĩa như sau:
+Vai trò	Phạm vi dữ liệu được xem	Quyền trên hồ sơ
+Nhân viên giao dịch	Chỉ hồ sơ do chính mình tạo hoặc được gán	Xem + Sửa hồ sơ của mình
+Cửa hàng trưởng	Toàn bộ hồ sơ thuộc chi nhánh của mình	Xem + Sửa + Duyệt trong chi nhánh
+Giám đốc Vùng	Tất cả hồ sơ trên toàn hệ thống	Toàn quyền (Xem, Sửa, Xóa, Xuất)
+Cách thiết lập trên Lark Base
+Vào phần Advanced Permission của bảng Ho_So_Hoa_Mang.
+Tạo ba nhóm quyền tương ứng với ba vai trò.
+Cấu hình điều kiện lọc dữ liệu (Record Filter):
+Nhân viên giao dịch: `Nhan_Vien_Phu_Trach = CurrentUser()` hoặc `CreatedBy = CurrentUser()`.
+Cửa hàng trưởng: `Chi_Nhanh = Chi_Nhanh_Cua_User_Hien_Tai`.
+Giám đốc Vùng: Không áp dụng bộ lọc.
+Phân quyền thao tác (View / Edit / Delete / Export) theo bảng ma trận trên.
+Việc thiết lập ma trận phân quyền giúp đảm bảo nguyên tắc least privilege – mỗi người chỉ truy cập đúng phạm vi công việc. Điều này vừa bảo vệ thông tin cá nhân khách hàng, vừa hỗ trợ quản lý giám sát hiệu quả theo cấp bậc tổ chức của Viettel Store.
+---
+Tổng kết: Kết hợp công thức Formula, liên kết bảng (Link – Lookup – Rollup) và phân quyền Role-based tạo nên hệ thống vừa tự động hóa tính toán hoa hồng, vừa bảo mật cao. Đây là nền tảng quan trọng để Viettel Store vận hành quy trình bán hàng viễn thông minh bạch và kiểm soát rủi ro rò rỉ dữ liệu.
+Ghi chú: Dữ liệu và tình huống mang tính giả định phục vụ mục đích học tập.
